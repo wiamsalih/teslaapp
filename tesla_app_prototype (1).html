@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Tesla App</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* hide leaflet attribution to keep UI clean */
+.leaflet-control-attribution{display:none!important}
+.leaflet-control-zoom{display:none!important}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+:root{
+  --bg:#080808;--bg2:#111;--bg3:#181818;--bg4:#202020;
+  --surface:#1c1c1c;--surface2:#242424;
+  --text:#e8e8e8;--text2:#909090;--text3:#505050;
+  --green:#22c55e;--silver:#a8b4bc;--silver2:#c8d4dc;--silver3:#6a7a84;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.13);
+  --f:'Rajdhani',sans-serif;--b:'DM Sans',sans-serif;
+}
+
+/* ── APP SHELL ─────────────────────────────── */
+html,body{width:100%;min-height:100vh;overflow-y:auto;overflow-x:hidden;background:#050505;font-family:var(--b);display:flex;align-items:center;justify-content:center;padding:20px 0}
+
+#app{
+  width:320px;
+  height:640px;
+  border-radius:42px;
+  box-shadow:0 0 0 2px #3a3a3a,0 0 0 4px #1a1a1a,0 30px 70px rgba(0,0,0,.9);
+  overflow:hidden;
+  position:relative;
+  flex-shrink:0;
+}
+#notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:90px;height:26px;background:#000;border-radius:0 0 14px 14px;z-index:300}
+
+/* ── SCREEN STACK ───────────────────────────── */
+/* All views sit stacked; only .active is shown */
+.view{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  background:var(--bg);
+  visibility:hidden;
+  pointer-events:none;
+}
+.view.active{visibility:visible;pointer-events:all}
+
+/* Status bar */
+.sb{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;
+  height:42px;
+  background:var(--bg);
+}
+.sb-time{font-family:var(--f);font-weight:600;font-size:14px;color:var(--text);letter-spacing:.4px}
+.sb-icons{font-family:var(--f);font-weight:600;font-size:11px;color:var(--text);display:flex;gap:5px}
+
+/* Scrollable body */
+.body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.body::-webkit-scrollbar{display:none}
+.pad{padding:0 14px 20px}
+
+/* Bottom nav */
+.nav{
+  flex-shrink:0;
+  display:flex;
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  height:56px;
+  padding:0 2px;
+}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border-radius:8px;transition:background .12s}
+.nb:active{background:var(--bg4)}
+.nb svg{width:18px;height:18px;stroke:var(--text3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s;display:block}
+.nb span{font-size:9px;color:var(--text3);font-family:var(--b);transition:color .15s;display:block}
+.nb.on svg{stroke:var(--silver2)}
+.nb.on span{color:var(--silver2)}
+
+/* ── TOAST ───────────────────────────────────── */
+#toast{
+  position:absolute;top:56px;left:14px;right:14px;
+  background:var(--green);border-radius:12px;
+  padding:11px 14px;display:flex;align-items:center;gap:9px;
+  z-index:999;
+  transform:translateY(-120px);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+  pointer-events:none;
+}
+#toast.show{transform:translateY(0)}
+#toast svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2.5;flex-shrink:0}
+#toast span{font-family:var(--b);font-size:13px;font-weight:500;color:#fff}
+
+/* ── DIALOGS ─────────────────────────────────── */
+.dlg-wrap{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,.72);
+  display:flex;align-items:flex-end;
+  z-index:500;
+  opacity:0;pointer-events:none;
+  transition:opacity .2s;
+}
+.dlg-wrap.open{opacity:1;pointer-events:all}
+.dlg{
+  width:100%;background:var(--bg2);
+  border-radius:22px 22px 0 0;
+  padding:22px 18px 36px;
+  transform:translateY(100%);
+  transition:transform .28s cubic-bezier(.34,1.2,.64,1);
+}
+.dlg-wrap.open .dlg{transform:translateY(0)}
+.dlg h3{font-family:var(--f);font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px}
+.dlg p{font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.5}
+.dlg-row{display:flex;gap:10px}
+.dlg-row .btn{flex:1}
+
+/* ── COMMON COMPONENTS ───────────────────────── */
+.card{background:var(--surface);border-radius:12px;padding:12px;border:1px solid var(--border)}
+.card+.card{margin-top:8px}
+
+.lbl{font-size:9px;font-weight:500;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin:14px 0 7px;font-family:var(--b)}
+
+.btn{
+  width:100%;padding:11px;
+  background:linear-gradient(135deg,#7a8b96,#b8c8d0);
+  border:none;border-radius:11px;
+  font-family:var(--f);font-size:14px;font-weight:700;color:#080808;
+  letter-spacing:.7px;cursor:pointer;
+  transition:opacity .15s,transform .1s;
+}
+.btn:active{opacity:.82;transform:scale(.98)}
+.btn.sec{background:var(--bg4);color:var(--text)}
+.btn.ghost{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+
+.sbar{
+  display:flex;align-items:center;
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:13px;padding:0 13px;height:46px;gap:9px;
+}
+.sbar svg{width:17px;height:17px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+.sbar input{flex:1;background:none;border:none;outline:none;font-family:var(--b);font-size:14px;color:var(--text);caret-color:var(--silver)}
+.sbar input::placeholder{color:var(--text3)}
+
+.back-btn{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.back-btn svg{width:17px;height:17px;stroke:var(--text2);fill:none;stroke-width:2.5;stroke-linecap:round}
+
+.pg-hd{font-family:var(--f);font-size:20px;font-weight:700;color:var(--text);letter-spacing:.4px;padding:4px 14px 0}
+
+/* map placeholder */
+.map-ph{background:var(--bg3);border-radius:14px;overflow:hidden;position:relative}
+.map-ph svg.grid{position:absolute;inset:0;width:100%;height:100%;opacity:.12}
+
+/* mini player */
+.mplayer{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:11px}
+.art{width:42px;height:42px;border-radius:9px;background:linear-gradient(135deg,#4a5a64,#8a9ba6);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.art svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2}
+.tinfo{flex:1;min-width:0}
+.tname{font-family:var(--f);font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tartist{font-size:11px;color:var(--text3);margin-top:2px}
+.pctrl{display:flex;gap:11px;align-items:center}
+.pctrl svg{width:19px;height:19px;stroke:var(--text2);fill:none;stroke-width:2;cursor:pointer}
+.pbtn{width:31px;height:31px;border-radius:50%;background:linear-gradient(135deg,#6a7a84,#a8b8c0);display:flex;align-items:center;justify-content:center}
+.pbtn svg{stroke:none;fill:#080808;width:13px;height:13px}
+
+/* qa cards */
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qa{background:var(--surface);border-radius:12px;padding:12px;cursor:pointer;border:1px solid var(--border);display:flex;flex-direction:column;gap:5px;transition:opacity .12s}
+.qa:active{opacity:.7}
+.qa svg{width:18px;height:18px;stroke:var(--silver2);fill:none;stroke-width:1.8}
+.qa h3{font-family:var(--f);font-size:13px;font-weight:700;color:var(--text)}
+.qa p{font-size:10px;color:var(--text3);line-height:1.4}
+
+/* temp */
+.tz{flex:1;background:var(--surface);border-radius:13px;padding:13px;text-align:center;border:1px solid var(--border)}
+.tz h4{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px;font-family:var(--b)}
+.tval{font-family:var(--f);font-size:40px;font-weight:700;color:var(--text);line-height:1}
+.tval sup{font-size:16px;vertical-align:super}
+.tbts{display:flex;gap:7px;margin-top:9px}
+.tbt{flex:1;height:38px;border:1px solid var(--border2);border-radius:9px;background:var(--bg4);color:var(--text);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s}
+.tbt:active{background:var(--silver3)}
+
+/* slider */
+.slrow{display:flex;align-items:center;gap:11px}
+.slrow svg{width:19px;height:19px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+input[type=range]{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--bg4);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#7a8b96,#b8c8d0);cursor:pointer;border:2px solid var(--bg)}
+.slval{font-family:var(--f);font-size:15px;font-weight:700;color:var(--text);min-width:16px;text-align:right}
+
+/* audio source */
+.asrc{display:flex;gap:8px}
+.as{flex:1;padding:10px 5px;background:var(--surface);border:1px solid var(--border);border-radius:11px;text-align:center;cursor:pointer;transition:all .12s}
+.as.on{background:rgba(168,180,188,.1);border-color:var(--silver)}
+.as svg{width:21px;height:21px;stroke:var(--text3);fill:none;stroke-width:1.8;margin-bottom:3px;transition:stroke .12s}
+.as.on svg{stroke:var(--silver2)}
+.as span{display:block;font-size:10px;color:var(--text3);font-family:var(--b);transition:color .12s}
+.as.on span{color:var(--silver2)}
+
+/* vol */
+.vrow{display:flex;align-items:center;gap:10px}
+.vrow svg{width:17px;height:17px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+
+/* presets */
+.pgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.pi{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 3px;text-align:center;cursor:pointer;transition:all .12s}
+.pi.sv{background:rgba(168,180,188,.1);border-color:var(--silver)}
+.pi b{font-family:var(--f);font-size:11px;font-weight:600;color:var(--text3);display:block}
+.pi.sv b{color:var(--silver2)}
+.pi small{font-size:9px;color:var(--text3)}
+.pi.sv small{color:var(--silver);opacity:.7}
+
+/* fav / autocomplete items */
+.fi{padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px}
+.fi:last-child{border-bottom:none}
+.fi:active{opacity:.7}
+.fic{width:34px;height:34px;border-radius:9px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fic svg{width:17px;height:17px;stroke:var(--text2);fill:none;stroke-width:2}
+.fi p{font-size:14px;color:var(--text);font-family:var(--b);font-weight:500}
+.fi span{font-size:11px;color:var(--text3)}
+
+/* door dot */
+.dd{position:absolute;width:27px;height:27px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.dd.lk{background:rgba(168,180,188,.12);border-color:var(--silver)}
+.dd.lk svg{stroke:var(--silver2)}
+.dd.ul{background:rgba(34,197,94,.15);border-color:var(--green)}
+.dd.ul svg{stroke:var(--green)}
+.dd svg{width:13px;height:13px;fill:none;stroke-width:2}
+
+/* status badge */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-family:var(--b);font-weight:500}
+.badge.lk{background:rgba(168,180,188,.1);color:var(--silver2)}
+.badge.ul{background:rgba(34,197,94,.1);color:var(--green)}
+.badge .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* route card */
+.rc{background:var(--surface);border-radius:14px;padding:14px;border:1px solid var(--border)}
+.rdest{font-family:var(--f);font-size:17px;font-weight:700;color:var(--text);margin-bottom:3px}
+.rmeta{display:flex;gap:14px;margin-top:7px}
+.rmeta span{font-size:12px;color:var(--text2)}
+.rmeta b{color:var(--text);font-weight:600}
+
+/* seat arrows */
+.sarrows{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;width:110px;margin:0 auto}
+.sa{height:38px;background:var(--bg4);border:1px solid var(--border2);border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s}
+.sa:active{background:var(--silver3)}
+.sa svg{width:15px;height:15px;stroke:var(--text2);fill:none;stroke-width:2.5;stroke-linecap:round}
+.sa.empty{background:var(--bg3);cursor:default}
+
+/* route map */
+.rmap{flex:1;min-height:0;position:relative;overflow:hidden}
+#leaflet-map{position:absolute;inset:0;width:100%;height:100%}
+.route-sheet{background:var(--bg2);border-radius:22px 22px 0 0;padding:18px 18px 0;flex-shrink:0}
+.route-sheet .handle{width:36px;height:4px;background:var(--text3);border-radius:2px;margin:0 auto 14px}
+.nb{min-width:0}
+.nb svg,.nb span{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="notch"></div>
+
+  <!-- TOAST -->
+  <div id="toast"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span id="tmsg">Done</span></div>
+
+  <!-- ═══════ HOME ═══════ -->
+  <div class="view active" id="v-home">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div class="body pad">
+      <div style="padding:4px 0 10px;display:flex;align-items:center;justify-content:space-between">
+        <div><p style="font-size:10px;color:var(--text3)">Welcome back</p><h2 style="font-family:var(--f);font-size:18px;font-weight:700;color:var(--text)">Tesla Model S</h2></div>
+        <div id="hbadge" class="badge lk"><div class="dot"></div>Locked</div>
+      </div>
+      <!-- map tap area -->
+      <div style="height:120px;margin-bottom:10px;border-radius:12px;overflow:hidden;cursor:pointer;position:relative" onclick="go('v-dest')">
+        <div id="home-map" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></div>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;background:rgba(0,0,0,.35);z-index:10">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--silver2)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
+          <p style="font-size:12px;color:#fff;font-weight:500;text-shadow:0 1px 3px rgba(0,0,0,.8)">Tap to set destination</p>
+        </div>
+      </div>
+      <p class="lbl">Quick Access</p>
+      <div class="qa-grid">
+        <div class="qa" onclick="go('v-dest')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><h3>Navigate</h3><p>Set destination</p></div>
+        <div class="qa" onclick="go('v-prec')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><h3>Warm Up Car</h3><p>Pre-condition cabin</p></div>
+        <div class="qa" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><h3>Lock / Unlock</h3><p id="hlocktxt">Vehicle is locked</p></div>
+        <div class="qa" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><h3>Audio</h3><p>Music &amp; radio</p></div>
+      </div>
+      <p class="lbl">Now Playing</p>
+      <div class="mplayer" onclick="go('v-audio')" style="cursor:pointer">
+        <div class="art"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <div class="tinfo"><div class="tname">Electric Feel</div><div class="tartist">MGMT</div></div>
+        <div class="pctrl">
+          <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+          <div class="pbtn"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+          <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nb on" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+      <div class="nb" onclick="go('v-dest')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+      <div class="nb" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+      <div class="nb" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+      <div class="nb" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════ DESTINATION ═══════ -->
+  <div class="view" id="v-dest">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div style="padding:6px 18px 12px;display:flex;align-items:center;gap:11px;flex-shrink:0">
+      <div class="back-btn" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+      <div class="sbar" style="flex:1"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="dinput" placeholder="Search destination…" oninput="acSearch(this.value)" autocomplete="off"></div>
+    </div>
+    <div class="body pad" style="padding-top:0">
+      <div id="aclist" style="background:var(--surface);border-radius:13px;border:1px solid var(--border);display:none;margin-bottom:12px"></div>
+      <div id="ddefault">
+        <p class="lbl" style="margin-top:4px">Saved Places</p>
+        <div style="background:var(--surface);border-radius:13px;padding:0 13px;border:1px solid var(--border)">
+          <div class="fi" onclick="selDest('Home','123 Maple Ave')"><div class="fic"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><div><p>Home</p><span>123 Maple Ave</span></div></div>
+          <div class="fi" onclick="selDest('Work','1776 University Blvd')"><div class="fic"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div><div><p>Work</p><span>1776 University Blvd</span></div></div>
+          <div class="fi" onclick="selDest('Gym','45 Fitness Center Dr')"><div class="fic"><svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/></svg></div><div><p>Gym</p><span>45 Fitness Center Dr</span></div></div>
+        </div>
+        <p class="lbl">Recent</p>
+        <div style="background:var(--surface);border-radius:13px;padding:0 13px;border:1px solid var(--border)">
+          <div class="fi" onclick="selDest('123 HCI Road','Scienceville, MD')"><div class="fic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><p>123 HCI Road</p><span>Scienceville, MD</span></div></div>
+          <div class="fi" onclick="selDest('Blue Bottle Coffee','Main Street')"><div class="fic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><p>Blue Bottle Coffee</p><span>Main Street</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ ROUTE PREVIEW ═══════ -->
+  <div class="view" id="v-route">
+    <div class="rmap">
+      <div id="leaflet-map"></div>
+    </div>
+    <div class="route-sheet">
+      <div class="handle"></div>
+      <div class="rc" style="margin-bottom:13px">
+        <div class="rdest" id="rdestname">123 HCI Road, Scienceville MD</div>
+        <div class="rmeta"><span><b>18 min</b></span><span><b>7.2 mi</b></span><span style="color:var(--green)"><b>No traffic</b></span></div>
+      </div>
+      <div style="display:flex;gap:10px;padding-bottom:18px">
+        <button class="btn ghost" onclick="go('v-dest')" style="flex:1">Cancel</button>
+        <button class="btn" style="flex:2" onclick="startNav()">Start Navigation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ AUDIO ═══════ -->
+  <div class="view" id="v-audio">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div class="pg-hd">Audio</div>
+    <div class="body pad">
+      <p class="lbl" style="margin-top:10px">Source</p>
+      <div class="asrc">
+        <div class="as on" id="as-phone" onclick="setAudio('phone')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.64 3.42 2 2 0 0 1 3.62 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span>Phone</span></div>
+        <div class="as" id="as-radio" onclick="setAudio('radio')"><svg viewBox="0 0 24 24"><path d="M1 6l10-4 10 4"/><rect x="1" y="6" width="22" height="15" rx="2"/><circle cx="12" cy="13" r="3"/></svg><span>Radio</span></div>
+        <div class="as" id="as-stream" onclick="setAudio('stream')"><svg viewBox="0 0 24 24"><path d="M8.5 2a14.5 14.5 0 0 1 7 19"/><path d="M5.25 5.25A10 10 0 0 0 5 12a10 10 0 0 0 2.9 7.07"/><path d="M11 8a5 5 0 0 1 2 9.58"/><circle cx="12" cy="16" r="1"/></svg><span>Streaming</span></div>
+      </div>
+
+      <div id="ap-phone">
+        <p class="lbl">Now Playing</p>
+        <div class="card" style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="art" style="width:50px;height:50px;border-radius:10px"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+            <div class="tinfo"><div class="tname" style="font-size:16px">Electric Feel</div><div class="tartist" style="font-size:12px">MGMT · Oracular Spectacular</div></div>
+          </div>
+          <div style="display:flex;justify-content:center;gap:22px;align-items:center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+            <div class="pbtn" style="width:46px;height:46px"><svg viewBox="0 0 24 24" style="width:18px;height:18px"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div id="ap-radio" style="display:none">
+        <p class="lbl">FM Tuner</p>
+        <div class="card">
+          <div style="text-align:center;margin-bottom:11px">
+            <p style="font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">FM</p>
+            <p style="font-family:var(--f);font-size:40px;font-weight:700;color:var(--text)" id="rfreq">98.5</p>
+          </div>
+          <div style="display:flex;gap:9px;margin-bottom:10px">
+            <button class="btn sec" onclick="tune(-0.2)" style="flex:1;padding:10px">− 0.2</button>
+            <button class="btn sec" onclick="tune(0.2)" style="flex:1;padding:10px">+ 0.2</button>
+          </div>
+          <button class="btn" onclick="openPresetDlg()">Save to Preset</button>
+        </div>
+        <p class="lbl">Presets</p>
+        <div class="pgrid" id="pgrid"></div>
+      </div>
+
+      <div id="ap-stream" style="display:none">
+        <p class="lbl">Streaming</p>
+        <div class="card" style="text-align:center;padding:22px">
+          <p style="font-size:13px;color:var(--text2)">Connect a streaming account in Settings</p>
+        </div>
+      </div>
+
+      <p class="lbl">Volume</p>
+      <div class="card">
+        <div class="vrow">
+          <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+          <input type="range" min="0" max="100" value="62" id="vol" oninput="document.getElementById('vval').textContent=this.value" step="1">
+          <span style="font-family:var(--f);font-size:14px;font-weight:600;color:var(--text2);min-width:26px;text-align:right" id="vval">62</span>
+        </div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nb" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+      <div class="nb" onclick="go('v-dest')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+      <div class="nb on" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+      <div class="nb" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+      <div class="nb" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════ CLIMATE ═══════ -->
+  <div class="view" id="v-climate">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div class="pg-hd">Climate</div>
+    <div class="body pad">
+      <div style="background:var(--surface);border-radius:12px;padding:10px 14px;margin:10px 0;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.8"><rect x="2" y="8" width="20" height="10" rx="3"/><path d="M6 8V6a6 6 0 0 1 12 0v2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+        <span style="font-size:12px;color:var(--text3)">Driver left · Passenger right</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div class="tz"><h4>Driver</h4><div class="tval" id="dtmp">72<sup>°</sup></div><div class="tbts"><button class="tbt" onclick="adjT('d',-1)">−</button><button class="tbt" onclick="adjT('d',1)">+</button></div></div>
+        <div class="tz"><h4>Passenger</h4><div class="tval" id="ptmp">70<sup>°</sup></div><div class="tbts"><button class="tbt" onclick="adjT('p',-1)">−</button><button class="tbt" onclick="adjT('p',1)">+</button></div></div>
+      </div>
+      <div class="card">
+        <p style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px">Fan Speed</p>
+        <div class="slrow">
+          <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m0 10a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m-8-4a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m16 0a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4"/></svg>
+          <input type="range" min="1" max="5" value="2" id="fan" oninput="document.getElementById('fanv').textContent=this.value" step="1">
+          <span class="slval" id="fanv">2</span>
+        </div>
+      </div>
+      <p class="lbl">Controls</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="card" style="text-align:center;cursor:pointer" onclick="toggleAC(this)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--silver2)" stroke-width="2" style="margin-bottom:5px"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66l4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66l4.24-4.24"/></svg>
+          <p style="font-size:11px;color:var(--silver2);font-family:var(--b);font-weight:500" id="actxt">A/C On</p>
+        </div>
+        <div class="card" style="text-align:center;cursor:pointer" onclick="toast('Rear defroster activated')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" style="margin-bottom:5px"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h12M6 14h12"/></svg>
+          <p style="font-size:11px;color:var(--text2);font-family:var(--b)">Rear Defrost</p>
+        </div>
+      </div>
+      <button class="btn" style="margin-top:13px" onclick="go('v-prec')">Warm Up Car</button>
+    </div>
+    <div class="nav">
+      <div class="nb" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+      <div class="nb" onclick="go('v-dest')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+      <div class="nb" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+      <div class="nb on" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+      <div class="nb" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════ PRE-CONDITION ═══════ -->
+  <div class="view" id="v-prec">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div style="padding:6px 18px;display:flex;align-items:center;gap:11px;flex-shrink:0">
+      <div class="back-btn" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+      <h2 style="font-family:var(--f);font-size:21px;font-weight:700;color:var(--text)">Warm Up Car</h2>
+    </div>
+    <div class="body pad" style="padding-top:4px">
+      <div class="card" style="text-align:center;padding:26px 18px">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="var(--silver2)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:10px"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        <p style="font-family:var(--f);font-size:30px;font-weight:700;color:var(--text)">58°F</p>
+        <p style="font-size:12px;color:var(--text3);margin-top:3px">Current cabin temperature</p>
+      </div>
+      <p class="lbl">Target Temperature</p>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <p style="font-size:13px;color:var(--text2)">Set to</p>
+          <div style="display:flex;align-items:center;gap:11px">
+            <button class="tbt" style="width:34px;height:34px" onclick="adjPT(-1)">−</button>
+            <span style="font-family:var(--f);font-size:21px;font-weight:700;color:var(--text)" id="ptval">72°</span>
+            <button class="tbt" style="width:34px;height:34px" onclick="adjPT(1)">+</button>
+          </div>
+        </div>
+      </div>
+      <p class="lbl">Saved Profile</p>
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+        <div><p style="font-size:14px;color:var(--text);font-weight:500">My Profile</p><p style="font-size:11px;color:var(--text3);margin-top:2px">72°F · Fan 2 · A/C on</p></div>
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+      </div>
+      <button class="btn" style="margin-top:16px" onclick="openDlg('d-prec')">Activate Pre-conditioning</button>
+    </div>
+  </div>
+
+  <!-- ═══════ VEHICLE ═══════ -->
+  <div class="view" id="v-veh">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div class="pg-hd">Vehicle</div>
+    <div class="body pad">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px">
+        <div id="vbadge" class="badge lk"><div class="dot"></div><span id="vbtxt">All Locked</span></div>
+        <button id="ulbtn" class="btn" style="width:auto;padding:9px 18px;font-size:14px" onclick="openDlg('d-unlock')">Unlock All</button>
+      </div>
+      <!-- Car diagram -->
+      <div style="background:var(--surface);border-radius:14px;padding:18px;border:1px solid var(--border);position:relative">
+        <svg viewBox="0 0 200 290" style="width:130px;display:block;margin:0 auto">
+          <rect x="38" y="55" width="124" height="180" rx="20" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+          <rect x="53" y="82" width="94" height="56" rx="5" fill="var(--bg3)"/>
+          <rect x="53" y="155" width="94" height="46" rx="5" fill="var(--bg3)"/>
+          <ellipse cx="48" cy="250" rx="13" ry="9" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+          <ellipse cx="152" cy="250" rx="13" ry="9" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+          <ellipse cx="48" cy="70" rx="13" ry="9" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+          <ellipse cx="152" cy="70" rx="13" ry="9" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+          <rect id="trunksvg" x="58" y="218" width="84" height="20" rx="5" fill="rgba(168,180,188,.12)" stroke="var(--silver)" stroke-width="1.5" stroke-dasharray="4,3" style="cursor:pointer" onclick="openDlg('d-trunk')"/>
+          <text x="100" y="232" text-anchor="middle" font-size="8" fill="var(--silver)" font-family="DM Sans, sans-serif">Trunk</text>
+        </svg>
+        <!-- door dots -->
+        <div id="dd-fl" class="dd lk" style="position:absolute;top:82px;left:18px" onclick="openDlg('d-unlock')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <div id="dd-fr" class="dd lk" style="position:absolute;top:82px;right:18px" onclick="openDlg('d-unlock')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <div id="dd-rl" class="dd lk" style="position:absolute;top:142px;left:18px" onclick="openDlg('d-unlock')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+        <div id="dd-rr" class="dd lk" style="position:absolute;top:142px;right:18px" onclick="openDlg('d-unlock')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+      </div>
+      <p class="lbl">Actions</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="card" style="text-align:center;cursor:pointer" onclick="openDlg('d-trunk')">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="1.8" style="margin-bottom:6px"><rect x="2" y="8" width="20" height="10" rx="2"/><path d="M12 8V4"/></svg>
+          <p style="font-size:12px;color:var(--text2)">Open Trunk</p>
+        </div>
+        <div class="card" style="text-align:center;cursor:pointer" onclick="go('v-seat')">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="1.8" style="margin-bottom:6px"><path d="M5 13V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v8l3 3"/><path d="M14 13h2a2 2 0 0 1 2 2v4H7v-2a2 2 0 0 1 2-2h2"/></svg>
+          <p style="font-size:12px;color:var(--text2)">Seating</p>
+        </div>
+      </div>
+    </div>
+    <div class="nav">
+      <div class="nb" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+      <div class="nb" onclick="go('v-dest')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+      <div class="nb" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+      <div class="nb" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+      <div class="nb on" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+    </div>
+  </div>
+
+  <!-- ═══════ SEATING ═══════ -->
+  <div class="view" id="v-seat">
+    <div class="sb"><span class="sb-time">9:41</span><div class="sb-icons"><span>5G</span><span>100%</span></div></div>
+    <div style="padding:6px 18px;display:flex;align-items:center;gap:11px;flex-shrink:0">
+      <div class="back-btn" onclick="go('v-veh')"><svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+      <h2 style="font-family:var(--f);font-size:21px;font-weight:700;color:var(--text)">Driver Seat</h2>
+    </div>
+    <div class="body pad" style="padding-top:4px">
+      <p class="lbl" style="margin-top:4px">Position</p>
+      <div class="card">
+        <div style="display:flex;gap:18px;align-items:center">
+          <svg width="65" height="85" viewBox="0 0 65 85" fill="none" style="flex-shrink:0">
+            <rect x="8" y="8" width="38" height="48" rx="7" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+            <rect x="13" y="56" width="28" height="16" rx="5" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+            <rect x="46" y="18" width="10" height="28" rx="4" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+          </svg>
+          <div>
+            <p style="font-size:11px;color:var(--text3);margin-bottom:7px">Tap arrows to adjust</p>
+            <div class="sarrows">
+              <div style="grid-column:2" class="sa" onclick="toast('Seat moved forward')"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+              <div class="sa" onclick="toast('Recline −')"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+              <div class="sa empty"></div>
+              <div class="sa" onclick="toast('Recline +')"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+              <div style="grid-column:2" class="sa" onclick="toast('Seat moved back')"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:13px">
+          <p style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px">Height</p>
+          <div class="slrow">
+            <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+            <input type="range" min="1" max="5" value="3" step="1">
+            <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+      </div>
+      <p class="lbl">Seat Heating</p>
+      <div style="display:flex;gap:9px">
+        <div class="card" style="flex:1;text-align:center;cursor:pointer" onclick="toast('Seat heat: Low')"><p style="font-size:18px;margin-bottom:3px">〰</p><p style="font-size:11px;color:var(--text3)">Low</p></div>
+        <div class="card" style="flex:1;text-align:center;cursor:pointer;background:rgba(168,180,188,.1);border-color:var(--silver)" onclick="toast('Seat heat: Med')"><p style="font-size:18px;margin-bottom:3px">♨</p><p style="font-size:11px;color:var(--silver2)">Med</p></div>
+        <div class="card" style="flex:1;text-align:center;cursor:pointer" onclick="toast('Seat heat: High')"><p style="font-size:18px;margin-bottom:3px">🔥</p><p style="font-size:11px;color:var(--text3)">High</p></div>
+      </div>
+      <p class="lbl">Profiles</p>
+      <div style="display:flex;gap:9px;margin-bottom:13px">
+        <div class="card" style="flex:1;cursor:pointer;border-color:var(--silver);background:rgba(168,180,188,.08)" onclick="toast('Profile 1 loaded')"><p style="font-family:var(--f);font-size:13px;font-weight:700;color:var(--silver2)">Profile 1</p><p style="font-size:10px;color:var(--text3);margin-top:2px">My Position</p></div>
+        <div class="card" style="flex:1;cursor:pointer" onclick="toast('Profile 2 empty')"><p style="font-family:var(--f);font-size:13px;font-weight:700;color:var(--text3)">Profile 2</p><p style="font-size:10px;color:var(--text3);margin-top:2px">Empty</p></div>
+        <div class="card" style="flex:1;cursor:pointer" onclick="toast('Profile 3 empty')"><p style="font-family:var(--f);font-size:13px;font-weight:700;color:var(--text3)">Profile 3</p><p style="font-size:10px;color:var(--text3);margin-top:2px">Empty</p></div>
+      </div>
+      <button class="btn" onclick="openDlg('d-seat')">Save Current Position</button>
+    </div>
+  </div>
+
+  <!-- ═══════ DIALOGS ═══════ -->
+  <div class="dlg-wrap" id="d-unlock"><div class="dlg"><h3>Unlock All Doors?</h3><p>All 4 doors will unlock. Make sure you are near your vehicle.</p><div class="dlg-row"><button class="btn ghost" onclick="closeDlg('d-unlock')">Cancel</button><button class="btn" onclick="doUnlock()">Confirm</button></div></div></div>
+  <div class="dlg-wrap" id="d-trunk"><div class="dlg"><h3>Open Trunk?</h3><p>The trunk will open remotely. Ensure no one is behind the vehicle.</p><div class="dlg-row"><button class="btn ghost" onclick="closeDlg('d-trunk')">Cancel</button><button class="btn" onclick="doTrunk()">Confirm</button></div></div></div>
+  <div class="dlg-wrap" id="d-prec"><div class="dlg"><h3>Start Pre-conditioning?</h3><p>Cabin will warm to your target temperature using battery power.</p><div class="dlg-row"><button class="btn ghost" onclick="closeDlg('d-prec')">Cancel</button><button class="btn" onclick="doPrec()">Confirm</button></div></div></div>
+  <div class="dlg-wrap" id="d-preset"><div class="dlg"><h3>Save Station</h3><p id="dpresetmsg">Save to a preset slot.</p><div class="pgrid" id="dpgrid" style="margin-bottom:14px"></div><button class="btn ghost" onclick="closeDlg('d-preset')">Cancel</button></div></div>
+  <div class="dlg-wrap" id="d-seat"><div class="dlg"><h3>Save Seat Profile</h3><p>Name this position to load it with one tap.</p><div class="sbar" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M5 13V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v8l3 3"/><path d="M14 13h2a2 2 0 0 1 2 2v4H7v-2a2 2 0 0 1 2-2h2"/></svg><input id="seatname" placeholder="e.g. My Seat" value="My Seat"></div><div class="dlg-row"><button class="btn ghost" onclick="closeDlg('d-seat')">Cancel</button><button class="btn" onclick="doSeat()">Save Profile</button></div></div></div>
+
+</div><!-- /app -->
+
+<script>
+var dT=72,pT=70,prT=72,freq=98.5,presets={},trunkOpen=false,locked=true;
+
+function go(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  // scroll each view's body back to top on navigate
+  var b=document.querySelector('#'+id+' .body');
+  if(b) b.scrollTop=0;
+}
+
+function toast(msg){
+  var t=document.getElementById('toast');
+  document.getElementById('tmsg').textContent=msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+function openDlg(id){document.getElementById(id).classList.add('open')}
+function closeDlg(id){document.getElementById(id).classList.remove('open')}
+
+// Destination
+function acSearch(v){
+  var ac=document.getElementById('aclist'),dd=document.getElementById('ddefault');
+  if(!v){ac.style.display='none';dd.style.display='block';return;}
+  dd.style.display='none';
+  var list=[{n:'123 HCI Road',a:'Scienceville, MD'},{n:'Blue Bottle Coffee',a:'Main Street'},{n:'123 Main Street',a:'Arlington, VA'},{n:'1234 Penn Ave',a:'Washington, DC'}]
+    .filter(s=>s.n.toLowerCase().includes(v.toLowerCase())||s.a.toLowerCase().includes(v.toLowerCase()));
+  if(!list.length){ac.style.display='none';return;}
+  ac.style.display='block';
+  ac.innerHTML=list.map(s=>`<div class="fi" style="padding:11px 13px" onclick="selDest('${s.n}','${s.a}')"><div class="fic"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" width="17" height="17"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg></div><div><p>${s.n}</p><span>${s.a}</span></div></div>`).join('');
+}
+
+function selDest(n,a){
+  document.getElementById('rdestname').textContent=n+', '+a;
+  document.getElementById('dinput').value='';
+  acSearch('');
+  // Pick destination coords based on name
+  var coords={
+    'Home':[38.932,-77.042],
+    'Work':[38.904,-77.016],
+    'Gym':[38.918,-77.055],
+    '123 HCI Road':[38.975,-77.000],
+    'Blue Bottle Coffee':[38.900,-77.028]
+  };
+  var dest=coords[n]||[38.960,-77.010];
+  go('v-route');
+  setTimeout(()=>initMap(dest),50);
+}
+
+function startNav(){toast('Navigation started');go('v-home')}
+
+// Audio
+function setAudio(src){
+  ['phone','radio','stream'].forEach(s=>{
+    document.getElementById('as-'+s).classList.toggle('on',s===src);
+    document.getElementById('ap-'+s).style.display=s===src?'block':'none';
+  });
+}
+
+function tune(d){
+  freq=Math.round((freq+d)*10)/10;
+  if(freq<87.5)freq=107.9; if(freq>107.9)freq=87.5;
+  document.getElementById('rfreq').textContent=freq.toFixed(1);
+  document.getElementById('dpresetmsg').textContent='Save '+freq.toFixed(1)+' FM to a slot.';
+}
+
+function renderPresets(){
+  var h='';for(var i=1;i<=10;i++){var sv=presets[i];h+=`<div class="pi${sv?' sv':''}" onclick="loadPreset(${i})"><b>P${i}</b><small>${sv||'--'}</small></div>`;}
+  document.getElementById('pgrid').innerHTML=h;
+}
+
+function openPresetDlg(){
+  document.getElementById('dpresetmsg').textContent='Save '+freq.toFixed(1)+' FM to a slot.';
+  var h='';for(var i=1;i<=10;i++){h+=`<div class="pi" style="cursor:pointer" onclick="savePreset(${i})"><b>P${i}</b><small>${presets[i]||'Empty'}</small></div>`;}
+  document.getElementById('dpgrid').innerHTML=h;
+  openDlg('d-preset');
+}
+
+function savePreset(slot){presets[slot]=freq.toFixed(1);renderPresets();closeDlg('d-preset');toast('Saved '+freq.toFixed(1)+' FM → Preset '+slot)}
+function loadPreset(s){if(presets[s]){freq=parseFloat(presets[s]);document.getElementById('rfreq').textContent=freq.toFixed(1);toast('Playing '+freq.toFixed(1)+' FM')}}
+
+// Climate
+function adjT(z,d){if(z==='d'){dT+=d;document.getElementById('dtmp').innerHTML=dT+'<sup>°</sup>';}else{pT+=d;document.getElementById('ptmp').innerHTML=pT+'<sup>°</sup>';}}
+function adjPT(d){prT+=d;document.getElementById('ptval').textContent=prT+'°'}
+function toggleAC(el){
+  var t=document.getElementById('actxt'),on=t.textContent==='A/C On';
+  t.textContent=on?'A/C Off':'A/C On';
+  t.style.color=on?'var(--text3)':'var(--silver2)';
+  el.querySelector('svg').style.stroke=on?'var(--text3)':'var(--silver2)';
+  toast(on?'A/C turned off':'A/C turned on');
+}
+
+// Vehicle
+function doUnlock(){
+  closeDlg('d-unlock');locked=false;
+  ['dd-fl','dd-fr','dd-rl','dd-rr'].forEach(id=>{
+    var e=document.getElementById(id);
+    e.classList.replace('lk','ul');
+    e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+  });
+  var b=document.getElementById('vbadge');b.classList.replace('lk','ul');
+  document.getElementById('vbtxt').textContent='Unlocked';
+  var hb=document.getElementById('hbadge');hb.classList.replace('lk','ul');
+  hb.innerHTML='<div class="dot"></div>Unlocked';
+  document.getElementById('hlocktxt').textContent='Vehicle is unlocked';
+  document.getElementById('ulbtn').textContent='Lock All';
+  document.getElementById('ulbtn').onclick=doLock;
+  toast('Vehicle unlocked');
+}
+function doLock(){
+  locked=true;
+  ['dd-fl','dd-fr','dd-rl','dd-rr'].forEach(id=>{
+    var e=document.getElementById(id);
+    e.classList.replace('ul','lk');
+    e.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  });
+  document.getElementById('vbadge').classList.replace('ul','lk');
+  document.getElementById('vbtxt').textContent='All Locked';
+  document.getElementById('hbadge').classList.replace('ul','lk');
+  document.getElementById('hbadge').innerHTML='<div class="dot"></div>Locked';
+  document.getElementById('hlocktxt').textContent='Vehicle is locked';
+  document.getElementById('ulbtn').textContent='Unlock All';
+  document.getElementById('ulbtn').onclick=()=>openDlg('d-unlock');
+  toast('Vehicle locked');
+}
+
+function doTrunk(){
+  closeDlg('d-trunk');trunkOpen=!trunkOpen;
+  var el=document.getElementById('trunksvg');
+  el.setAttribute('fill',trunkOpen?'rgba(34,197,94,.15)':'rgba(168,180,188,.12)');
+  el.setAttribute('stroke',trunkOpen?'var(--green)':'var(--silver)');
+  toast(trunkOpen?'Trunk opened':'Trunk closed');
+}
+
+function doPrec(){closeDlg('d-prec');toast('Pre-conditioning started · ~10 min');setTimeout(()=>go('v-home'),500)}
+function doSeat(){var n=document.getElementById('seatname').value||'My Seat';closeDlg('d-seat');toast('"'+n+'" profile saved')}
+
+renderPresets();
+</script>
+<script>
+// Dynamically load Leaflet then init maps — guarantees L is defined
+(function(){
+  var css=document.createElement('link');
+  css.rel='stylesheet';
+  css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+  document.head.appendChild(css);
+
+  var js=document.createElement('script');
+  js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  js.onload=function(){
+    initHomeMap();
+  };
+  document.head.appendChild(js);
+})();
+
+var leafMap=null, routeLine=null, homeMap=null;
+
+function initHomeMap(){
+  if(homeMap||!document.getElementById('home-map')) return;
+  homeMap=L.map('home-map',{zoomControl:false,attributionControl:false,dragging:false,touchZoom:false,scrollWheelZoom:false,doubleClickZoom:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18,subdomains:'abcd'}).addTo(homeMap);
+  homeMap.setView([38.910,-77.030],13);
+  setTimeout(function(){homeMap.invalidateSize();},300);
+}
+
+function initMap(destCoords){
+  var origin=[38.897,-77.036];
+  var dest=destCoords||[38.960,-77.010];
+
+  if(!leafMap){
+    leafMap=L.map('leaflet-map',{zoomControl:false,attributionControl:false});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18,subdomains:'abcd'}).addTo(leafMap);
+  }
+
+  if(routeLine){leafMap.removeLayer(routeLine);}
+  document.querySelectorAll('.lf-marker').forEach(function(m){m.remove();});
+
+  var waypoints=[origin,[38.910,-77.030],[38.925,-77.022],[38.940,-77.016],dest];
+  routeLine=L.polyline(waypoints,{color:'#C8D4DC',weight:5,opacity:.9,lineCap:'round',lineJoin:'round'}).addTo(leafMap);
+
+  var originIcon=L.divIcon({html:'<div style="width:14px;height:14px;border-radius:50%;background:#6A7A84;border:3px solid #C8D4DC;box-shadow:0 0 0 4px rgba(168,180,188,.3)"></div>',className:'lf-marker',iconSize:[14,14],iconAnchor:[7,7]});
+  var destIcon=L.divIcon({html:'<div style="width:14px;height:14px;border-radius:50%;background:#C8D4DC;border:3px solid #fff;box-shadow:0 0 0 6px rgba(200,212,220,.35)"></div>',className:'lf-marker',iconSize:[14,14],iconAnchor:[7,7]});
+  L.marker(origin,{icon:originIcon}).addTo(leafMap);
+  L.marker(dest,{icon:destIcon}).addTo(leafMap);
+
+  leafMap.fitBounds(routeLine.getBounds(),{padding:[40,40]});
+  setTimeout(function(){leafMap.invalidateSize();},150);
+}
+</script>
+</body>
+</html>
