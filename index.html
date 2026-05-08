@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tesla App Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --red:#C0C8D0;--red2:#D8E0E8;
+  --bg:#080808;--bg2:#111111;--bg3:#181818;--bg4:#202020;
+  --surface:#1C1C1C;--surface2:#242424;
+  --text:#E8E8E8;--text2:#909090;--text3:#505050;
+  --green:#22C55E;--green2:#16a34a;
+  --blue:#7A9BB5;--amber:#F59E0B;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.14);
+  --silver:#A8B4BC;--silver2:#C8D4DC;--silver3:#6A7A84;
+  --font:'Rajdhani',sans-serif;--body:'DM Sans',sans-serif;
+}
+html,body{height:100%;background:#050505;display:flex;align-items:center;justify-content:center;font-family:var(--body)}
+.device-wrap{position:relative;width:390px;height:844px;background:#000;border-radius:52px;box-shadow:0 0 0 2px #3A3A3A,0 0 0 4px #222,0 40px 80px rgba(0,0,0,0.9);overflow:hidden;flex-shrink:0}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:126px;height:34px;background:#000;border-radius:0 0 20px 20px;z-index:200}
+.screen{position:absolute;inset:0;overflow:hidden;background:var(--bg)}
+
+/* ── SCREENS ── */
+.view{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .25s}
+.view.active{opacity:1;pointer-events:all}
+
+/* status bar */
+.status{height:44px;padding:12px 24px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:10}
+.status-time{font-family:var(--font);font-weight:600;font-size:15px;color:var(--text);letter-spacing:.5px}
+.status-icons{display:flex;gap:6px;align-items:center}
+.status-icons span{font-size:11px;color:var(--text);font-family:var(--font);font-weight:600}
+
+/* bottom nav */
+.nav{height:72px;background:var(--bg2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 4px 8px;flex-shrink:0}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;cursor:pointer;border-radius:12px;transition:background .15s}
+.nav-btn:active{background:var(--bg4)}
+.nav-btn svg{width:22px;height:22px;stroke:var(--text3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .15s}
+.nav-btn span{font-size:10px;color:var(--text3);font-family:var(--body);font-weight:400;letter-spacing:.2px;transition:color .15s}
+.nav-btn.active svg{stroke:var(--silver2)}
+.nav-btn.active span{color:var(--silver2)}
+
+/* scrollable content */
+.content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.content::-webkit-scrollbar{display:none}
+
+/* card */
+.card{background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)}
+.card+.card{margin-top:10px}
+
+/* section label */
+.section-label{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:1.2px;text-transform:uppercase;margin:20px 0 10px;font-family:var(--body)}
+
+/* button */
+.btn{width:100%;padding:14px;background:linear-gradient(135deg,#8A9BA6,#C0CDD4);border:none;border-radius:14px;font-family:var(--font);font-size:17px;font-weight:700;color:#0A0A0A;letter-spacing:.8px;cursor:pointer;transition:opacity .15s,transform .1s}
+.btn:active{opacity:.85;transform:scale(.98)}
+.btn.secondary{background:var(--bg4);color:var(--text);background:linear-gradient(135deg,#1E1E1E,#282828)}
+.btn.ghost{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+.btn.success-btn{background:var(--green2)}
+
+/* toast */
+#toast{position:absolute;top:52px;left:16px;right:16px;background:var(--green);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:999;transform:translateY(-80px);transition:transform .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none}
+#toast.show{transform:translateY(0)}
+#toast svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5;flex-shrink:0}
+#toast span{font-family:var(--body);font-size:14px;font-weight:500;color:#fff}
+
+/* dialog overlay */
+.dialog-overlay{position:absolute;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+.dialog-overlay.open{opacity:1;pointer-events:all}
+.dialog-sheet{background:var(--bg2);border-radius:24px 24px 0 0;padding:24px 20px 40px;width:100%;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.2,.64,1)}
+.dialog-overlay.open .dialog-sheet{transform:translateY(0)}
+.dialog-title{font-family:var(--font);font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:.3px}
+.dialog-sub{font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.5}
+.dialog-actions{display:flex;gap:10px}
+.dialog-actions .btn{flex:1}
+
+/* input */
+.search-bar{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:0 14px;height:48px;gap:10px}
+.search-bar svg{width:18px;height:18px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+.search-bar input{flex:1;background:none;border:none;outline:none;font-family:var(--body);font-size:15px;color:var(--text);caret-color:var(--silver2)}
+.search-bar input::placeholder{color:var(--text3)}
+
+/* map placeholder */
+.map-ph{background:var(--bg3);border-radius:16px;overflow:hidden;position:relative}
+.map-grid{position:absolute;inset:0;opacity:.15}
+
+/* temp control */
+.temp-zone{flex:1;background:var(--surface);border-radius:14px;padding:14px;text-align:center}
+.temp-zone h4{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;font-family:var(--body)}
+.temp-display{font-family:var(--font);font-size:44px;font-weight:700;color:var(--text);line-height:1}
+.temp-display sup{font-size:18px;vertical-align:super}
+.temp-btns{display:flex;gap:8px;margin-top:10px}
+.temp-btn{flex:1;height:40px;border:1px solid var(--border2);border-radius:10px;background:var(--bg4);color:var(--text);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.temp-btn:active{background:var(--silver);border-color:var(--silver)}
+
+/* fan slider */
+.fan-row{display:flex;align-items:center;gap:12px;margin-top:12px}
+.fan-row svg{width:20px;height:20px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+.fan-slider{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--bg4);outline:none}
+.fan-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#8A9BA6,#C0CDD4);cursor:pointer;border:2px solid var(--bg)}
+.fan-val{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);min-width:16px;text-align:right}
+
+/* lock diagram */
+.car-diagram{background:var(--surface);border-radius:16px;padding:20px;position:relative}
+.car-body{width:160px;height:260px;margin:0 auto;position:relative}
+.car-body svg{width:100%;height:100%}
+.door-dot{position:absolute;width:28px;height:28px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.door-dot.locked{background:rgba(168,180,188,.15);border-color:var(--silver)}
+.door-dot.locked svg{stroke:var(--silver2)}
+.door-dot.unlocked{background:rgba(34,197,94,.15);border-color:var(--green)}
+.door-dot.unlocked svg{stroke:var(--green)}
+.door-dot svg{width:14px;height:14px;fill:none;stroke-width:2}
+
+/* seat diagram */
+.seat-ctrl{background:var(--surface);border-radius:16px;padding:16px}
+.seat-arrows{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:120px;margin:0 auto}
+.seat-arrow{height:40px;background:var(--bg4);border:1px solid var(--border2);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
+.seat-arrow:active{background:var(--silver3);border-color:var(--silver3)}
+.seat-arrow svg{width:16px;height:16px;stroke:var(--text2);fill:none;stroke-width:2.5;stroke-linecap:round}
+.seat-arrow.center{background:var(--bg3);cursor:default}
+
+/* audio */
+.audio-source{display:flex;gap:8px}
+.src-btn{flex:1;padding:10px 6px;background:var(--surface);border:1px solid var(--border);border-radius:12px;text-align:center;cursor:pointer;transition:all .15s}
+.src-btn.active{background:rgba(168,180,188,.1);border-color:var(--silver)}
+.src-btn svg{width:22px;height:22px;stroke:var(--text3);fill:none;stroke-width:1.8;margin-bottom:4px;transition:stroke .15s}
+.src-btn.active svg{stroke:var(--silver2)}
+.src-btn span{display:block;font-size:11px;color:var(--text3);font-family:var(--body);transition:color .15s}
+.src-btn.active span{color:var(--silver2)}
+.vol-row{display:flex;align-items:center;gap:10px;margin-top:12px}
+.vol-row svg{width:18px;height:18px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+.vol-slider{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:var(--bg4);outline:none}
+.vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#8A9BA6,#C0CDD4);cursor:pointer;border:2px solid var(--bg)}
+.vol-val{font-family:var(--font);font-size:14px;font-weight:600;color:var(--text2);min-width:28px;text-align:right}
+
+/* mini player */
+.mini-player{background:var(--surface);border-radius:14px;padding:12px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)}
+.album-art{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#7A8B96,#B0BCC4);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.album-art svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2}
+.track-info{flex:1;min-width:0}
+.track-name{font-family:var(--font);font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track-artist{font-size:12px;color:var(--text3);margin-top:2px}
+.player-controls{display:flex;gap:12px;align-items:center}
+.player-controls svg{width:20px;height:20px;stroke:var(--text2);fill:none;stroke-width:2;cursor:pointer}
+.player-controls .play-btn{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#7A8B96,#B0BCC4);display:flex;align-items:center;justify-content:center}
+.player-controls .play-btn svg{stroke:#0A0A0A;width:14px;height:14px}
+
+/* route card */
+.route-card{background:var(--surface);border-radius:16px;padding:16px}
+.route-dest{font-family:var(--font);font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px}
+.route-meta{display:flex;gap:16px;margin-top:8px}
+.route-meta span{font-size:13px;color:var(--text2);display:flex;align-items:center;gap:4px}
+.route-meta span b{color:var(--text);font-weight:600}
+
+/* presets */
+.preset-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.preset-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 4px;text-align:center;cursor:pointer;transition:all .15s}
+.preset-item.saved{background:rgba(168,180,188,.1);border-color:var(--silver)}
+.preset-item span{font-family:var(--font);font-size:12px;font-weight:600;color:var(--text3);display:block}
+.preset-item.saved span{color:var(--silver2)}
+.preset-item p{font-size:10px;color:var(--text3);margin-top:2px}
+.preset-item.saved p{color:var(--silver2);opacity:.7}
+
+/* autocomplete */
+.autocomplete-item{padding:12px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:12px;transition:background .1s}
+.autocomplete-item:active{background:var(--surface2)}
+.autocomplete-item:last-child{border-bottom:none}
+.autocomplete-item svg{width:18px;height:18px;stroke:var(--text3);fill:none;stroke-width:2;flex-shrink:0}
+.autocomplete-item div p{font-size:14px;color:var(--text);font-family:var(--body)}
+.autocomplete-item div span{font-size:12px;color:var(--text3)}
+
+/* favorite item */
+.fav-item{padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background .1s}
+.fav-item:active{background:var(--surface2)}
+.fav-item:last-child{border-bottom:none}
+.fav-icon{width:36px;height:36px;border-radius:10px;background:var(--bg4);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fav-icon svg{width:18px;height:18px;stroke:var(--text2);fill:none;stroke-width:2}
+.fav-item p{font-size:15px;color:var(--text);font-family:var(--body);font-weight:500}
+.fav-item span{font-size:12px;color:var(--text3)}
+
+/* climate car icon */
+.climate-zones{display:flex;gap:10px;margin-bottom:16px}
+
+/* quick access */
+.qa-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.qa-card{background:var(--surface);border-radius:16px;padding:16px;cursor:pointer;transition:all .15s;border:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.qa-card:active{background:var(--surface2);transform:scale(.97)}
+.qa-card svg{width:24px;height:24px;stroke:var(--silver2);fill:none;stroke-width:1.8}
+.qa-card h3{font-family:var(--font);font-size:16px;font-weight:700;color:var(--text);letter-spacing:.3px}
+.qa-card p{font-size:12px;color:var(--text3);font-family:var(--body);line-height:1.4}
+
+/* vehicle status badge */
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-family:var(--body);font-weight:500}
+.status-badge.locked{background:rgba(168,180,188,.12);color:var(--silver2)}
+.status-badge.unlocked{background:rgba(34,197,94,.12);color:var(--green)}
+.status-badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+h1.page-title{font-family:var(--font);font-size:26px;font-weight:700;color:var(--text);letter-spacing:.5px;padding:8px 20px 0}
+.px{padding:0 20px}
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="notch"></div>
+  <div class="screen">
+
+    <!-- TOAST -->
+    <div id="toast">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="toast-msg">Done</span>
+    </div>
+
+    <!-- ══════════════ HOME ══════════════ -->
+    <div class="view active" id="v-home">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <div class="content" style="padding:0 20px 20px">
+        <div style="padding:8px 0 16px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <p style="font-size:12px;color:var(--text3);font-family:var(--body)">Welcome back</p>
+            <h2 style="font-family:var(--font);font-size:24px;font-weight:700;color:var(--text);letter-spacing:.3px">Tesla Model S</h2>
+          </div>
+          <div id="home-lock-badge" class="status-badge locked"><div class="dot"></div>Locked</div>
+        </div>
+
+        <!-- map -->
+        <div class="map-ph" style="height:160px;margin-bottom:14px" onclick="go('v-destination')">
+          <svg class="map-grid" viewBox="0 0 390 160" preserveAspectRatio="none"><defs><pattern id="g" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width=".5"/></pattern></defs><rect width="390" height="160" fill="url(#g)"/></svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--silver)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
+            <p style="font-size:13px;color:var(--text2);font-family:var(--body)">Tap to set destination</p>
+          </div>
+        </div>
+
+        <p class="section-label">Quick Access</p>
+        <div class="qa-grid">
+          <div class="qa-card" onclick="go('v-destination')">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>
+            <h3>Navigate</h3>
+            <p>Set your destination</p>
+          </div>
+          <div class="qa-card" onclick="go('v-precondition')">
+            <svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+            <h3>Warm Up Car</h3>
+            <p>Pre-condition cabin</p>
+          </div>
+          <div class="qa-card" onclick="go('v-vehicle')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <h3>Lock / Unlock</h3>
+            <p id="home-lock-txt">Vehicle is locked</p>
+          </div>
+          <div class="qa-card" onclick="go('v-audio')">
+            <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <h3>Audio</h3>
+            <p>Music & radio</p>
+          </div>
+        </div>
+
+        <p class="section-label">Now Playing</p>
+        <div class="mini-player" onclick="go('v-audio')">
+          <div class="album-art"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+          <div class="track-info"><div class="track-name">Electric Feel</div><div class="track-artist">MGMT</div></div>
+          <div class="player-controls">
+            <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+            <div class="play-btn"><svg viewBox="0 0 24 24" style="fill:#0A0A0A;stroke:none"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+            <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-btn active" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+        <div class="nav-btn" onclick="go('v-destination')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+        <div class="nav-btn" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+        <div class="nav-btn" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+        <div class="nav-btn" onclick="go('v-vehicle')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ DESTINATION ══════════════ -->
+    <div class="view" id="v-destination">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <div style="padding:8px 20px 14px;display:flex;align-items:center;gap:12px">
+        <div onclick="back()" style="width:36px;height:36px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+        <div class="search-bar" style="flex:1">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="dest-input" placeholder="Search destination…" oninput="showAutocomplete(this.value)" autocomplete="off">
+        </div>
+      </div>
+      <div class="content" style="padding:0 20px 20px">
+        <div id="autocomplete-results" style="background:var(--surface);border-radius:14px;border:1px solid var(--border);display:none"></div>
+        <div id="dest-default">
+          <p class="section-label">Saved Places</p>
+          <div style="background:var(--surface);border-radius:14px;padding:0 14px;border:1px solid var(--border)">
+            <div class="fav-item" onclick="selectFavorite('Home','123 Maple Ave')"><div class="fav-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><div><p>Home</p><span>123 Maple Ave</span></div></div>
+            <div class="fav-item" onclick="selectFavorite('Work','1776 University Blvd')"><div class="fav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div><div><p>Work</p><span>1776 University Blvd</span></div></div>
+            <div class="fav-item" onclick="selectFavorite('Gym','45 Fitness Center Dr')"><div class="fav-icon"><svg viewBox="0 0 24 24"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div><div><p>Gym</p><span>45 Fitness Center Dr</span></div></div>
+          </div>
+          <p class="section-label">Recent</p>
+          <div style="background:var(--surface);border-radius:14px;padding:0 14px;border:1px solid var(--border)">
+            <div class="fav-item" onclick="selectFavorite('123 HCI Road','Scienceville, MD')"><div class="fav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><p>123 HCI Road</p><span>Scienceville, MD</span></div></div>
+            <div class="fav-item" onclick="selectFavorite('Blue Bottle Coffee','Main Street')"><div class="fav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><p>Blue Bottle Coffee</p><span>Main Street</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ ROUTE PREVIEW ══════════════ -->
+    <div class="view" id="v-route">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <div class="map-ph" style="flex:1;margin:0;border-radius:0;position:relative">
+        <svg class="map-grid" viewBox="0 0 390 500" preserveAspectRatio="none"><defs><pattern id="g2" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width=".5"/></pattern></defs><rect width="390" height="500" fill="url(#g2)"/><path d="M195 400 Q120 300 160 180 Q180 100 195 80" stroke="var(--silver)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="195" cy="400" r="8" fill="var(--blue)"/><circle cx="195" cy="80" r="8" fill="var(--silver)"/></svg>
+      </div>
+      <div style="background:var(--bg2);border-radius:24px 24px 0 0;padding:20px;margin-top:-20px;position:relative">
+        <div style="width:40px;height:4px;background:var(--text3);border-radius:2px;margin:0 auto 16px"></div>
+        <div class="route-card">
+          <div class="route-dest" id="route-dest-name">123 HCI Road, Scienceville MD</div>
+          <div class="route-meta">
+            <span><b>18 min</b></span>
+            <span><b>7.2 mi</b></span>
+            <span style="color:var(--green)"><b>No traffic</b></span>
+          </div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:10px">
+          <button class="btn ghost" onclick="back()" style="flex:1">Cancel</button>
+          <button class="btn" style="flex:2" onclick="startNav()">Start Navigation</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ AUDIO ══════════════ -->
+    <div class="view" id="v-audio">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <h1 class="page-title">Audio</h1>
+      <div class="content" style="padding:12px 20px 20px">
+        <p class="section-label" style="margin-top:4px">Source</p>
+        <div class="audio-source">
+          <div class="src-btn active" id="src-phone" onclick="setSource('phone')">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.64 3.42 2 2 0 0 1 3.62 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span>Phone</span>
+          </div>
+          <div class="src-btn" id="src-radio" onclick="setSource('radio')">
+            <svg viewBox="0 0 24 24"><path d="M1 6l10-4 10 4"/><rect x="1" y="6" width="22" height="15" rx="2"/><circle cx="12" cy="13" r="3"/></svg>
+            <span>Radio</span>
+          </div>
+          <div class="src-btn" id="src-stream" onclick="setSource('stream')">
+            <svg viewBox="0 0 24 24"><path d="M8.5 2a14.5 14.5 0 0 1 7 19"/><path d="M5.25 5.25A10 10 0 0 0 5 12a10 10 0 0 0 2.9 7.07"/><path d="M11 8a5 5 0 0 1 2 9.58"/><circle cx="12" cy="16" r="1"/></svg>
+            <span>Streaming</span>
+          </div>
+        </div>
+
+        <div id="audio-phone-panel">
+          <p class="section-label">Now Playing</p>
+          <div class="mini-player" style="flex-direction:column;align-items:stretch;gap:12px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="album-art"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+              <div class="track-info"><div class="track-name">Electric Feel</div><div class="track-artist">MGMT • Oracular Spectacular</div></div>
+            </div>
+            <div class="player-controls" style="justify-content:center;gap:24px">
+              <svg viewBox="0 0 24 24" style="width:24px;height:24px"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+              <div class="play-btn" style="width:48px;height:48px"><svg viewBox="0 0 24 24" style="fill:#fff;stroke:none;width:20px;height:20px"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+              <svg viewBox="0 0 24 24" style="width:24px;height:24px"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div id="audio-radio-panel" style="display:none">
+          <p class="section-label">Radio Tuner</p>
+          <div class="card">
+            <div style="text-align:center;margin-bottom:12px">
+              <p style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-family:var(--body)">FM</p>
+              <p style="font-family:var(--font);font-size:42px;font-weight:700;color:var(--text)" id="radio-freq">98.5</p>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button class="btn secondary" onclick="tuneRadio(-0.2)" style="flex:1;padding:10px">− 0.2</button>
+              <button class="btn secondary" onclick="tuneRadio(0.2)" style="flex:1;padding:10px">+ 0.2</button>
+            </div>
+            <button class="btn" style="margin-top:10px" onclick="savePreset()">Save to Preset</button>
+          </div>
+          <p class="section-label">Presets</p>
+          <div class="preset-grid" id="preset-grid"></div>
+        </div>
+
+        <div id="audio-stream-panel" style="display:none">
+          <p class="section-label">Streaming</p>
+          <div class="card" style="text-align:center;padding:24px">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:12px"><path d="M8.5 2a14.5 14.5 0 0 1 7 19"/><path d="M5.25 5.25A10 10 0 0 0 5 12a10 10 0 0 0 2.9 7.07"/><path d="M11 8a5 5 0 0 1 2 9.58"/><circle cx="12" cy="16" r="1"/></svg>
+            <p style="font-size:14px;color:var(--text2)">Connect your streaming account in Settings</p>
+          </div>
+        </div>
+
+        <p class="section-label">Volume</p>
+        <div class="card">
+          <div class="vol-row">
+            <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>
+            <input type="range" class="vol-slider" min="0" max="100" value="62" id="vol-slider" oninput="document.getElementById('vol-val').textContent=this.value" step="1">
+            <span class="vol-val" id="vol-val">62</span>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-btn" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+        <div class="nav-btn" onclick="go('v-destination')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+        <div class="nav-btn active" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+        <div class="nav-btn" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+        <div class="nav-btn" onclick="go('v-vehicle')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ CLIMATE ══════════════ -->
+    <div class="view" id="v-climate">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <h1 class="page-title">Climate</h1>
+      <div class="content" style="padding:12px 20px 20px">
+        <p class="section-label" style="margin-top:4px">Temperature Zones</p>
+        <!-- Car diagram label -->
+        <div style="background:var(--surface);border-radius:14px;padding:12px 16px;margin-bottom:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:8px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.8"><rect x="2" y="8" width="20" height="10" rx="3"/><path d="M6 8V6a6 6 0 0 1 12 0v2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+          <span style="font-size:13px;color:var(--text3);font-family:var(--body)">Driver left · Passenger right</span>
+        </div>
+        <div class="climate-zones">
+          <div class="temp-zone">
+            <h4>Driver</h4>
+            <div class="temp-display" id="driver-temp">72<sup>°</sup></div>
+            <div class="temp-btns">
+              <button class="temp-btn" onclick="adjustTemp('driver',-1)">−</button>
+              <button class="temp-btn" onclick="adjustTemp('driver',1)">+</button>
+            </div>
+          </div>
+          <div class="temp-zone">
+            <h4>Passenger</h4>
+            <div class="temp-display" id="pass-temp">70<sup>°</sup></div>
+            <div class="temp-btns">
+              <button class="temp-btn" onclick="adjustTemp('pass',-1)">−</button>
+              <button class="temp-btn" onclick="adjustTemp('pass',1)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <p style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;font-family:var(--body)">Fan Speed</p>
+          <div class="fan-row">
+            <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m0 10a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m-8-4a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4m16 0a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4"/></svg>
+            <input type="range" class="fan-slider" min="1" max="5" value="2" id="fan-slider" oninput="document.getElementById('fan-val').textContent=this.value" step="1">
+            <span class="fan-val" id="fan-val">2</span>
+          </div>
+        </div>
+        <p class="section-label">Controls</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="card" style="text-align:center;cursor:pointer" onclick="toggleAC(this)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--silver)" stroke-width="2" style="margin-bottom:6px"><path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66l4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66l4.24-4.24"/></svg>
+            <p style="font-size:12px;color:var(--silver2);font-family:var(--body);font-weight:500">A/C On</p>
+          </div>
+          <div class="card" style="text-align:center;cursor:pointer" onclick="toast('Rear defroster activated')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2" style="margin-bottom:6px"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h12M6 14h12"/></svg>
+            <p style="font-size:12px;color:var(--text2);font-family:var(--body)">Rear Defrost</p>
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <button class="btn secondary" onclick="go('v-precondition')">Warm Up Car</button>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-btn" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+        <div class="nav-btn" onclick="go('v-destination')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+        <div class="nav-btn" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+        <div class="nav-btn active" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+        <div class="nav-btn" onclick="go('v-vehicle')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ PRE-CONDITION ══════════════ -->
+    <div class="view" id="v-precondition">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <div style="padding:8px 20px;display:flex;align-items:center;gap:12px">
+        <div onclick="back()" style="width:36px;height:36px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+        <h2 style="font-family:var(--font);font-size:22px;font-weight:700;color:var(--text)">Warm Up Car</h2>
+      </div>
+      <div class="content" style="padding:8px 20px 20px">
+        <div class="card" style="text-align:center;padding:28px 20px">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--silver)" stroke-width="1.5" stroke-linecap="round" style="margin-bottom:12px"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          <p style="font-family:var(--font);font-size:32px;font-weight:700;color:var(--text)">58°F</p>
+          <p style="font-size:13px;color:var(--text3);margin-top:4px;font-family:var(--body)">Current cabin temperature</p>
+        </div>
+        <p class="section-label">Target Temperature</p>
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <p style="font-size:14px;color:var(--text2);font-family:var(--body)">Set to</p>
+            <div style="display:flex;align-items:center;gap:12px">
+              <button class="temp-btn" style="width:36px;height:36px" onclick="adjustPreTemp(-1)">−</button>
+              <span style="font-family:var(--font);font-size:22px;font-weight:700;color:var(--text)" id="pre-temp">72°</span>
+              <button class="temp-btn" style="width:36px;height:36px" onclick="adjustPreTemp(1)">+</button>
+            </div>
+          </div>
+        </div>
+        <p class="section-label">Saved Profile</p>
+        <div class="card" style="display:flex;align-items:center;justify-content:space-between">
+          <div><p style="font-size:15px;color:var(--text);font-family:var(--body);font-weight:500">My Profile</p><p style="font-size:12px;color:var(--text3)">72°F · Fan 2 · A/C on</p></div>
+          <div style="width:28px;height:28px;border-radius:50%;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        </div>
+        <button class="btn" style="margin-top:20px" onclick="openDialog('dlg-precond')">Activate Pre-conditioning</button>
+      </div>
+    </div>
+
+    <!-- ══════════════ VEHICLE ══════════════ -->
+    <div class="view" id="v-vehicle">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <h1 class="page-title">Vehicle</h1>
+      <div class="content" style="padding:12px 20px 20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div id="vehicle-status-badge" class="status-badge locked"><div class="dot"></div><span id="vehicle-status-txt">All Locked</span></div>
+          <button id="unlock-btn" class="btn" style="width:auto;padding:10px 20px;font-size:15px" onclick="openDialog('dlg-unlock')">Unlock All</button>
+        </div>
+        <!-- Car top-down diagram -->
+        <div class="car-diagram">
+          <svg viewBox="0 0 200 300" style="width:140px;display:block;margin:0 auto">
+            <rect x="40" y="60" width="120" height="180" rx="20" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+            <rect x="55" y="90" width="90" height="60" rx="6" fill="var(--bg3)"/>
+            <rect x="55" y="165" width="90" height="50" rx="6" fill="var(--bg3)"/>
+            <ellipse cx="50" cy="260" rx="14" ry="10" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+            <ellipse cx="150" cy="260" rx="14" ry="10" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+            <ellipse cx="50" cy="75" rx="14" ry="10" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+            <ellipse cx="150" cy="75" rx="14" ry="10" fill="var(--bg3)" stroke="var(--border2)" stroke-width="1.5"/>
+            <!-- trunk clickable area -->
+            <rect id="trunk-area" x="55" y="230" width="90" height="25" rx="6" fill="rgba(59,130,246,0.15)" stroke="var(--blue)" stroke-width="1.5" stroke-dasharray="4,3" style="cursor:pointer" onclick="openDialog('dlg-trunk')"/>
+            <text x="100" y="247" text-anchor="middle" font-size="9" fill="var(--blue)" font-family="DM Sans">Trunk</text>
+          </svg>
+          <!-- door dots -->
+          <div id="dd-fl" class="door-dot locked" style="position:absolute;top:88px;left:20px" onclick="openDialog('dlg-unlock')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div id="dd-fr" class="door-dot locked" style="position:absolute;top:88px;right:20px" onclick="openDialog('dlg-unlock')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div id="dd-rl" class="door-dot locked" style="position:absolute;top:148px;left:20px" onclick="openDialog('dlg-unlock')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div id="dd-rr" class="door-dot locked" style="position:absolute;top:148px;right:20px" onclick="openDialog('dlg-unlock')">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+        </div>
+        <p class="section-label">Actions</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="card" style="text-align:center;cursor:pointer" onclick="openDialog('dlg-trunk')">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="1.8" style="margin-bottom:8px"><rect x="2" y="8" width="20" height="10" rx="2"/><path d="M12 8V4"/></svg>
+            <p style="font-size:13px;color:var(--text2);font-family:var(--body)">Open Trunk</p>
+          </div>
+          <div class="card" style="text-align:center;cursor:pointer" onclick="go('v-seating')">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="1.8" style="margin-bottom:8px"><path d="M5 13V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v8l3 3"/><path d="M14 13h2a2 2 0 0 1 2 2v4H7v-2a2 2 0 0 1 2-2h2"/></svg>
+            <p style="font-size:13px;color:var(--text2);font-family:var(--body)">Seating</p>
+          </div>
+        </div>
+      </div>
+      <div class="nav">
+        <div class="nav-btn" onclick="go('v-home')"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>Home</span></div>
+        <div class="nav-btn" onclick="go('v-destination')"><svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg><span>Navigate</span></div>
+        <div class="nav-btn" onclick="go('v-audio')"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Audio</span></div>
+        <div class="nav-btn" onclick="go('v-climate')"><svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg><span>Climate</span></div>
+        <div class="nav-btn active" onclick="go('v-vehicle')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Vehicle</span></div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SEATING ══════════════ -->
+    <div class="view" id="v-seating">
+      <div class="status"><span class="status-time">9:41</span><div class="status-icons"><span>5G</span><span>100%</span></div></div>
+      <div style="padding:8px 20px;display:flex;align-items:center;gap:12px">
+        <div onclick="go('v-vehicle')" style="width:36px;height:36px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+        <h2 style="font-family:var(--font);font-size:22px;font-weight:700;color:var(--text)">Driver Seat</h2>
+      </div>
+      <div class="content" style="padding:8px 20px 20px">
+        <p class="section-label" style="margin-top:4px">Position Controls</p>
+        <div class="seat-ctrl">
+          <div style="display:flex;gap:20px;align-items:center">
+            <svg width="70" height="90" viewBox="0 0 70 90" fill="none" style="flex-shrink:0">
+              <rect x="10" y="10" width="40" height="50" rx="8" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+              <rect x="15" y="60" width="30" height="18" rx="5" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+              <rect x="50" y="20" width="10" height="30" rx="4" fill="var(--bg4)" stroke="var(--border2)" stroke-width="1.5"/>
+            </svg>
+            <div>
+              <p style="font-size:13px;color:var(--text3);margin-bottom:6px;font-family:var(--body)">Adjust using arrows</p>
+              <div class="seat-arrows">
+                <div class="seat-arrow" style="grid-column:2" onclick="toast('Seat moved forward')"><svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+                <div class="seat-arrow" onclick="toast('Recline decreased')"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></div>
+                <div class="seat-arrow center"></div>
+                <div class="seat-arrow" onclick="toast('Recline increased')"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div>
+                <div class="seat-arrow" style="grid-column:2" onclick="toast('Seat moved back')"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:14px">
+            <p style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;font-family:var(--body)">Height</p>
+            <div class="fan-row">
+              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+              <input type="range" class="fan-slider" min="1" max="5" value="3" step="1">
+              <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+        </div>
+        <p class="section-label">Seat Heating</p>
+        <div style="display:flex;gap:10px">
+          <div class="card" style="flex:1;text-align:center;cursor:pointer" onclick="toast('Seat heating: Level 1')"><p style="font-size:20px;margin-bottom:4px">〰</p><p style="font-size:12px;color:var(--text3);font-family:var(--body)">Low</p></div>
+          <div class="card" style="flex:1;text-align:center;cursor:pointer;background:rgba(168,180,188,.1);border-color:var(--silver)" onclick="toast('Seat heating: Level 2')"><p style="font-size:20px;margin-bottom:4px">🌡</p><p style="font-size:12px;color:var(--silver2);font-family:var(--body)">Med</p></div>
+          <div class="card" style="flex:1;text-align:center;cursor:pointer" onclick="toast('Seat heating: Level 3')"><p style="font-size:20px;margin-bottom:4px">🔥</p><p style="font-size:12px;color:var(--text3);font-family:var(--body)">High</p></div>
+        </div>
+        <p class="section-label">Profiles</p>
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <div class="card" style="flex:1;cursor:pointer;border-color:var(--silver);background:rgba(168,180,188,.08)" onclick="toast('Profile 1 loaded')"><p style="font-family:var(--font);font-size:14px;font-weight:700;color:var(--silver2)">Profile 1</p><p style="font-size:11px;color:var(--text3)">My Position</p></div>
+          <div class="card" style="flex:1;cursor:pointer" onclick="toast('Profile 2 loaded')"><p style="font-family:var(--font);font-size:14px;font-weight:700;color:var(--text3)">Profile 2</p><p style="font-size:11px;color:var(--text3)">Empty</p></div>
+          <div class="card" style="flex:1;cursor:pointer" onclick="toast('Profile 3 loaded')"><p style="font-family:var(--font);font-size:14px;font-weight:700;color:var(--text3)">Profile 3</p><p style="font-size:11px;color:var(--text3)">Empty</p></div>
+        </div>
+        <button class="btn" onclick="openDialog('dlg-seat')">Save Current Position</button>
+      </div>
+    </div>
+
+    <!-- ══════════════ DIALOGS ══════════════ -->
+    <div class="dialog-overlay" id="dlg-unlock">
+      <div class="dialog-sheet">
+        <div class="dialog-title">Unlock All Doors?</div>
+        <div class="dialog-sub">This will unlock all 4 doors. Make sure you are near your vehicle.</div>
+        <div class="dialog-actions">
+          <button class="btn ghost" onclick="closeDialog('dlg-unlock')">Cancel</button>
+          <button class="btn" onclick="doUnlock()">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-overlay" id="dlg-trunk">
+      <div class="dialog-sheet">
+        <div class="dialog-title">Open Trunk?</div>
+        <div class="dialog-sub">The trunk will open remotely. Make sure no one is standing behind the vehicle.</div>
+        <div class="dialog-actions">
+          <button class="btn ghost" onclick="closeDialog('dlg-trunk')">Cancel</button>
+          <button class="btn" onclick="doTrunk()">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-overlay" id="dlg-precond">
+      <div class="dialog-sheet">
+        <div class="dialog-title">Start Pre-conditioning?</div>
+        <div class="dialog-sub">The cabin will be warmed to your target temperature. This uses battery power.</div>
+        <div class="dialog-actions">
+          <button class="btn ghost" onclick="closeDialog('dlg-precond')">Cancel</button>
+          <button class="btn" onclick="doPrecond()">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-overlay" id="dlg-preset">
+      <div class="dialog-sheet">
+        <div class="dialog-title">Save Station</div>
+        <div class="dialog-sub" id="dlg-preset-msg">Save 98.5 FM to a preset slot.</div>
+        <div class="preset-grid" id="dlg-preset-grid" style="margin-bottom:16px"></div>
+        <button class="btn ghost" onclick="closeDialog('dlg-preset')">Cancel</button>
+      </div>
+    </div>
+
+    <div class="dialog-overlay" id="dlg-seat">
+      <div class="dialog-sheet">
+        <div class="dialog-title">Save Seat Profile</div>
+        <div class="dialog-sub">Name this seat position to load it later with one tap.</div>
+        <div class="search-bar" style="margin-bottom:14px"><svg viewBox="0 0 24 24"><path d="M5 13V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v8l3 3"/><path d="M14 13h2a2 2 0 0 1 2 2v4H7v-2a2 2 0 0 1 2-2h2"/></svg><input id="seat-name-input" placeholder="e.g. My Seat" value="My Seat"></div>
+        <div class="dialog-actions">
+          <button class="btn ghost" onclick="closeDialog('dlg-seat')">Cancel</button>
+          <button class="btn" onclick="doSaveSeat()">Save Profile</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /screen -->
+</div><!-- /device -->
+
+<script>
+var locked = true;
+var trunkOpen = false;
+var driverTemp = 72;
+var passTemp = 70;
+var preTemp = 72;
+var radioFreq = 98.5;
+var presets = {};
+var history = [];
+
+function go(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function back() {
+  go('v-home');
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+function openDialog(id) {
+  document.getElementById(id).classList.add('open');
+}
+
+function closeDialog(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function showAutocomplete(val) {
+  var res = document.getElementById('autocomplete-results');
+  var def = document.getElementById('dest-default');
+  if (!val) { res.style.display='none'; def.style.display='block'; return; }
+  def.style.display = 'none';
+  var suggestions = [
+    {name:'123 HCI Road', addr:'Scienceville, MD'},
+    {name:'Blue Bottle Coffee', addr:'Main Street, DC'},
+    {name:'123 Main Street', addr:'Arlington, VA'},
+    {name:'1234 Pennsylvania Ave', addr:'Washington, DC'}
+  ].filter(s => s.name.toLowerCase().includes(val.toLowerCase()) || s.addr.toLowerCase().includes(val.toLowerCase()));
+  if (!suggestions.length) { res.style.display='none'; return; }
+  res.style.display = 'block';
+  res.innerHTML = suggestions.map(function(s){
+    return '<div class="autocomplete-item" onclick="selectFavorite(\''+s.name+'\',\''+s.addr+'\')">' +
+      '<svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 1 8 8c0 5.25-8 13-8 13S4 15.25 4 10a8 8 0 0 1 8-8z"/></svg>' +
+      '<div><p>'+s.name+'</p><span>'+s.addr+'</span></div></div>';
+  }).join('');
+}
+
+function selectFavorite(name, addr) {
+  document.getElementById('route-dest-name').textContent = name + ', ' + addr;
+  document.getElementById('dest-input').value = '';
+  showAutocomplete('');
+  go('v-route');
+}
+
+function startNav() {
+  toast('Navigation started');
+  go('v-home');
+}
+
+function setSource(src) {
+  ['phone','radio','stream'].forEach(function(s){
+    var el = document.getElementById('src-'+s);
+    if(el) el.classList.toggle('active', s === src);
+  });
+  document.getElementById('audio-phone-panel').style.display = src==='phone' ? 'block' : 'none';
+  document.getElementById('audio-radio-panel').style.display = src==='radio' ? 'block' : 'none';
+  document.getElementById('audio-stream-panel').style.display = src==='stream' ? 'block' : 'none';
+}
+
+function tuneRadio(delta) {
+  radioFreq = Math.round((radioFreq + delta) * 10) / 10;
+  if(radioFreq < 87.5) radioFreq = 107.9;
+  if(radioFreq > 107.9) radioFreq = 87.5;
+  document.getElementById('radio-freq').textContent = radioFreq.toFixed(1);
+  document.getElementById('dlg-preset-msg').textContent = 'Save ' + radioFreq.toFixed(1) + ' FM to a preset slot.';
+}
+
+function renderPresets() {
+  var html = '';
+  for(var i=1; i<=10; i++){
+    var saved = presets[i];
+    html += '<div class="preset-item'+(saved?' saved':'') + '" onclick="loadPreset('+i+')">';
+    html += '<span>P'+i+'</span>';
+    html += '<p>'+(saved || '--')+'</p></div>';
+  }
+  document.getElementById('preset-grid').innerHTML = html;
+}
+
+function savePreset() {
+  document.getElementById('dlg-preset-msg').textContent = 'Save ' + radioFreq.toFixed(1) + ' FM to a preset slot.';
+  var html = '';
+  for(var i=1;i<=10;i++){
+    html += '<div class="preset-item" onclick="confirmPreset('+i+')" style="cursor:pointer"><span>P'+i+'</span><p>'+(presets[i]||'Empty')+'</p></div>';
+  }
+  document.getElementById('dlg-preset-grid').innerHTML = html;
+  openDialog('dlg-preset');
+}
+
+function confirmPreset(slot) {
+  presets[slot] = radioFreq.toFixed(1);
+  renderPresets();
+  closeDialog('dlg-preset');
+  toast('Saved ' + radioFreq.toFixed(1) + ' FM to Preset ' + slot);
+}
+
+function loadPreset(slot) {
+  if(presets[slot]) { radioFreq = parseFloat(presets[slot]); document.getElementById('radio-freq').textContent = radioFreq.toFixed(1); toast('Playing ' + radioFreq.toFixed(1) + ' FM'); }
+}
+
+function adjustTemp(zone, delta) {
+  if(zone==='driver'){ driverTemp+=delta; document.getElementById('driver-temp').innerHTML=driverTemp+'<sup>°</sup>'; }
+  else { passTemp+=delta; document.getElementById('pass-temp').innerHTML=passTemp+'<sup>°</sup>'; }
+}
+
+function adjustPreTemp(delta) {
+  preTemp += delta;
+  document.getElementById('pre-temp').textContent = preTemp + '°';
+}
+
+function toggleAC(el) {
+  var on = el.querySelector('p').textContent === 'A/C On';
+  el.querySelector('p').textContent = on ? 'A/C Off' : 'A/C On';
+  el.querySelector('p').style.color = on ? 'var(--text3)' : 'var(--silver)';
+  el.querySelector('svg').style.stroke = on ? 'var(--text3)' : 'var(--silver)';
+  toast(on ? 'A/C turned off' : 'A/C turned on');
+}
+
+function doUnlock() {
+  closeDialog('dlg-unlock');
+  locked = false;
+  ['dd-fl','dd-fr','dd-rl','dd-rr'].forEach(function(id){
+    var el = document.getElementById(id);
+    el.classList.remove('locked');
+    el.classList.add('unlocked');
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+  });
+  var badge = document.getElementById('vehicle-status-badge');
+  badge.classList.remove('locked'); badge.classList.add('unlocked');
+  document.getElementById('vehicle-status-txt').textContent = 'Unlocked';
+  document.getElementById('home-lock-badge').classList.remove('locked');
+  document.getElementById('home-lock-badge').classList.add('unlocked');
+  document.getElementById('home-lock-badge').querySelector('span') ? document.getElementById('home-lock-badge').innerHTML = '<div class="dot"></div>Unlocked' : null;
+  document.getElementById('home-lock-txt').textContent = 'Vehicle is unlocked';
+  document.getElementById('unlock-btn').textContent = 'Lock All';
+  document.getElementById('unlock-btn').onclick = function(){ openDialog('dlg-lock') || doLock(); };
+  toast('Vehicle unlocked');
+}
+
+function doLock() {
+  locked = true;
+  ['dd-fl','dd-fr','dd-rl','dd-rr'].forEach(function(id){
+    var el = document.getElementById(id);
+    el.classList.remove('unlocked'); el.classList.add('locked');
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  });
+  var badge = document.getElementById('vehicle-status-badge');
+  badge.classList.remove('unlocked'); badge.classList.add('locked');
+  document.getElementById('vehicle-status-txt').textContent = 'All Locked';
+  toast('Vehicle locked');
+}
+
+function doTrunk() {
+  closeDialog('dlg-trunk');
+  trunkOpen = !trunkOpen;
+  var area = document.getElementById('trunk-area');
+  if(trunkOpen){
+    area.setAttribute('fill','rgba(34,197,94,0.15)');
+    area.setAttribute('stroke','var(--green)');
+    toast('Trunk opened');
+  } else {
+    area.setAttribute('fill','rgba(59,130,246,0.15)');
+    area.setAttribute('stroke','var(--blue)');
+    toast('Trunk closed');
+  }
+}
+
+function doPrecond() {
+  closeDialog('dlg-precond');
+  toast('Pre-conditioning started · ~10 min');
+  setTimeout(function(){ go('v-home'); }, 600);
+}
+
+function doSaveSeat() {
+  var name = document.getElementById('seat-name-input').value || 'My Seat';
+  closeDialog('dlg-seat');
+  toast('Profile "' + name + '" saved');
+}
+
+// init
+renderPresets();
+</script>
+</body>
+</html>
